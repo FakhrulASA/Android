@@ -97,7 +97,4 @@ class DaoModule {
 
     @Provides
     fun allowedDomainsDao(database: AppDatabase) = database.authCookiesAllowedDomainsDao()
-
-    @Provides
-    fun downloadsDao(database: AppDatabase) = database.downloadsDao()
 }

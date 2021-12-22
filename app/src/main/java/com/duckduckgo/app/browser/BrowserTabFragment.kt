@@ -70,10 +70,7 @@ import com.duckduckgo.app.browser.DownloadConfirmationFragment.DownloadConfirmat
 import com.duckduckgo.app.browser.autocomplete.BrowserAutoCompleteSuggestionsAdapter
 import com.duckduckgo.app.browser.cookies.ThirdPartyCookieManager
 import com.duckduckgo.app.browser.downloader.BlobConverterInjector
-import com.duckduckgo.app.browser.downloader.DownloadFailReason
 import com.duckduckgo.app.browser.downloader.FileDownloadNotificationManager
-import com.duckduckgo.app.browser.downloader.FileDownloader
-import com.duckduckgo.app.browser.downloader.FileDownloader.PendingFileDownload
 import com.duckduckgo.app.browser.favicon.FaviconManager
 import com.duckduckgo.app.browser.favorites.FavoritesQuickAccessAdapter
 import com.duckduckgo.app.browser.favorites.FavoritesQuickAccessAdapter.QuickAccessFavorite
@@ -169,7 +166,6 @@ import com.duckduckgo.app.browser.BrowserTabViewModel.OmnibarViewState
 import com.duckduckgo.app.browser.BrowserTabViewModel.PrivacyGradeViewState
 import com.duckduckgo.app.browser.BrowserTabViewModel.SavedSiteChangedViewState
 import com.duckduckgo.app.downloads.DownloadsFileActions
-import com.duckduckgo.app.downloads.FileDownloadCallback
 import com.duckduckgo.app.browser.remotemessage.asMessage
 import com.duckduckgo.app.global.view.launchDefaultAppActivity
 import com.duckduckgo.app.playstore.PlayStoreUtils
@@ -178,9 +174,13 @@ import com.duckduckgo.app.utils.ConflatedJob
 import com.duckduckgo.app.widget.AddWidgetLauncher
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.remote.messaging.api.RemoteMessage
+import com.duckduckgo.downloads.api.DownloadCommand
+import com.duckduckgo.downloads.api.DownloadFailReason
+import com.duckduckgo.downloads.api.FileDownloader
+import com.duckduckgo.downloads.api.FileDownloader.PendingFileDownload
 import com.google.android.material.snackbar.BaseTransientBottomBar
 import kotlinx.coroutines.flow.cancellable
-import kotlinx.android.synthetic.main.include_cta.*
+import javax.inject.Provider
 
 class BrowserTabFragment :
     Fragment(),
@@ -602,22 +602,22 @@ class BrowserTabFragment :
         addTabsObserver()
     }
 
-    private fun processFileDownloadedCommand(command: FileDownloadCallback.DownloadCommand) {
+    private fun processFileDownloadedCommand(command: DownloadCommand) {
         when (command) {
-            is FileDownloadCallback.DownloadCommand.ShowDownloadStartedMessage -> downloadStarted(command)
-            is FileDownloadCallback.DownloadCommand.ShowDownloadFailedMessage -> downloadFailed(command)
-            is FileDownloadCallback.DownloadCommand.ShowDownloadSuccessMessage -> downloadSucceeded(command)
+            is DownloadCommand.ShowDownloadStartedMessage -> downloadStarted(command)
+            is DownloadCommand.ShowDownloadFailedMessage -> downloadFailed(command)
+            is DownloadCommand.ShowDownloadSuccessMessage -> downloadSucceeded(command)
         }
     }
 
-    private fun downloadStarted(command: FileDownloadCallback.DownloadCommand.ShowDownloadStartedMessage) {
+    private fun downloadStarted(command: DownloadCommand.ShowDownloadStartedMessage) {
         if (command.showNotification) {
             fileDownloadNotificationManager.showDownloadInProgressNotification()
         }
         view?.makeSnackbarWithNoBottomInset(getString(command.messageId, command.fileName), 750)?.show()
     }
 
-    private fun downloadFailed(command: FileDownloadCallback.DownloadCommand.ShowDownloadFailedMessage) {
+    private fun downloadFailed(command: DownloadCommand.ShowDownloadFailedMessage) {
         if (command.showNotification) {
             fileDownloadNotificationManager.showDownloadFailedNotification()
         }
@@ -634,7 +634,7 @@ class BrowserTabFragment :
         view?.postDelayed({ downloadFailedSnackbar ?.show() }, 1500L)
     }
 
-    private fun downloadSucceeded(command: FileDownloadCallback.DownloadCommand.ShowDownloadSuccessMessage) {
+    private fun downloadSucceeded(command: DownloadCommand.ShowDownloadSuccessMessage) {
         if (command.showNotification) {
             fileDownloadNotificationManager.showDownloadFinishedNotification(command.fileName, command.filePath.toUri(), command.mimeType)
         }

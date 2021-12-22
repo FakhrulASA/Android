@@ -34,6 +34,10 @@ include ':remote-messaging-api'
 include ':remote-messaging-impl'
 include ':remote-messaging-store'
 
+include ':downloads-api'
+include ':downloads-impl'
+include ':downloads-store'
+
 include ':common-test'
 
 project(':feature-toggles-api').projectDir = new File('feature-toggles/feature-toggles-api')
@@ -44,6 +48,10 @@ project(':privacy-config-store').projectDir = new File('privacy-config/privacy-c
 project(':remote-messaging-api').projectDir = new File('remote-messaging/remote-messaging-api')
 project(':remote-messaging-impl').projectDir = new File('remote-messaging/remote-messaging-impl')
 project(':remote-messaging-store').projectDir = new File('remote-messaging/remote-messaging-store')
+
+project(':downloads-api').projectDir = new File('downloads/downloads-api')
+project(':downloads-impl').projectDir = new File('downloads/downloads-impl')
+project(':downloads-store').projectDir = new File('downloads/downloads-store')
 
 project(':traces-api').projectDir = new File('traces/traces-api')
 project(':traces-impl').projectDir = new File('traces/traces-impl')
