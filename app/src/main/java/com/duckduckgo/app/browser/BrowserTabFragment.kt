@@ -179,7 +179,6 @@ import com.duckduckgo.app.widget.AddWidgetLauncher
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
 import com.duckduckgo.remote.messaging.api.RemoteMessage
 import com.google.android.material.snackbar.BaseTransientBottomBar
-import javax.inject.Provider
 import kotlinx.coroutines.flow.cancellable
 import kotlinx.android.synthetic.main.include_cta.*
 
