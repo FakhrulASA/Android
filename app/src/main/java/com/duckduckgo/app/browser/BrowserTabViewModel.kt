@@ -55,8 +55,8 @@ import com.duckduckgo.app.browser.SpecialUrlDetector.UrlType.NonHttpAppLink
 import com.duckduckgo.app.browser.addtohome.AddToHomeCapabilityDetector
 import com.duckduckgo.app.browser.applinks.AppLinksHandler
 import com.duckduckgo.app.browser.applinks.DuckDuckGoAppLinksHandler
-import com.duckduckgo.app.browser.downloader.DownloadFailReason
 import com.duckduckgo.app.browser.downloader.FileDownloader
+import com.duckduckgo.app.browser.downloader.FileDownloader.PendingFileDownload
 import com.duckduckgo.app.browser.favicon.FaviconManager
 import com.duckduckgo.app.browser.favicon.FaviconSource.ImageFavicon
 import com.duckduckgo.app.browser.favicon.FaviconSource.UrlFavicon
@@ -79,6 +79,8 @@ import com.duckduckgo.app.browser.ui.HttpAuthenticationDialogFragment.HttpAuthen
 import com.duckduckgo.app.browser.urlextraction.UrlExtractionListener
 import com.duckduckgo.app.cta.ui.*
 import com.duckduckgo.app.di.AppCoroutineScope
+import com.duckduckgo.app.downloads.DownloadCallback
+import com.duckduckgo.app.downloads.FileDownloadCallback
 import com.duckduckgo.app.email.EmailManager
 import com.duckduckgo.app.fire.fireproofwebsite.data.FireproofWebsiteEntity
 import com.duckduckgo.app.fire.fireproofwebsite.data.FireproofWebsiteRepository
@@ -128,7 +130,6 @@ import io.reactivex.schedulers.Schedulers
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
-import java.io.File
 import java.util.*
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -171,7 +172,8 @@ class BrowserTabViewModel(
     private val appLinksHandler: AppLinksHandler,
     private val variantManager: VariantManager,
     private val ampLinks: AmpLinks,
-    private val trackingParameters: TrackingParameters
+    private val trackingParameters: TrackingParameters,
+    private val downloadCallback: DownloadCallback
 ) : WebViewClientListener, EditSavedSiteListener, HttpAuthenticationListener, SiteLocationPermissionDialog.SiteLocationPermissionDialogListener,
     SystemLocationPermissionDialog.SystemLocationPermissionDialogListener, UrlExtractionListener, ViewModel() {
 
@@ -412,21 +414,6 @@ class BrowserTabViewModel(
             class HideDaxDialog(val cta: Cta) : DaxCommand()
         }
 
-        sealed class DownloadCommand : Command() {
-            class ScanMediaFiles(val file: File) : DownloadCommand()
-            class ShowDownloadFailedNotification(
-                val message: String,
-                val reason: DownloadFailReason
-            ) : DownloadCommand()
-
-            class ShowDownloadFinishedNotification(
-                val file: File,
-                val mimeType: String?
-            ) : DownloadCommand()
-
-            object ShowDownloadInProgressNotification : DownloadCommand()
-        }
-
         class EditWithSelectedQuery(val query: String) : Command()
     }
 
@@ -651,6 +638,10 @@ class BrowserTabViewModel(
         showBrowser()
     }
 
+    fun downloadCommands(): Flow<FileDownloadCallback.DownloadCommand> {
+        return downloadCallback.commands()
+    }
+
     private fun buildSiteFactory(
         url: String,
         title: String? = null
@@ -738,6 +729,7 @@ class BrowserTabViewModel(
     fun onViewHidden() {
         skipHome = false
         viewModelScope.launch {
+            downloadCallback
             refreshOnViewVisible.emit(false)
         }
     }
@@ -2468,62 +2460,9 @@ class BrowserTabViewModel(
         pixel.enqueueFire(AppPixelName.EMAIL_TOOLTIP_DISMISSED, mapOf(PixelParameter.COHORT to emailManager.getCohort()))
     }
 
-    fun download(pendingFileDownload: FileDownloader.PendingFileDownload) {
+    fun download(pendingFileDownload: PendingFileDownload) {
         viewModelScope.launch(dispatchers.io()) {
-            pixel.fire(AppPixelName.DOWNLOAD_REQUEST_STARTED)
-            fileDownloader.download(
-                pendingFileDownload,
-                object : FileDownloader.FileDownloadListener {
-
-                    override fun downloadStartedNetworkFile() {
-                        Timber.d("download started: network file")
-                        closeAndReturnToSourceIfBlankTab()
-                    }
-
-                    override fun downloadFinishedNetworkFile(
-                        file: File,
-                        mimeType: String?
-                    ) {
-                        // TODO [Improve downloads] This is unused.
-                        Timber.i("downloadFinished network file")
-                    }
-
-                    override fun downloadStartedDataUri() {
-                        Timber.i("downloadStarted data uri")
-                        command.postValue(DownloadCommand.ShowDownloadInProgressNotification)
-                        closeAndReturnToSourceIfBlankTab()
-                    }
-
-                    override fun downloadFinishedDataUri(
-                        file: File,
-                        mimeType: String?
-                    ) {
-                        Timber.i("downloadFinished data uri")
-                        pixel.fire(AppPixelName.DOWNLOAD_REQUEST_SUCCEEDED)
-                        command.postValue(DownloadCommand.ScanMediaFiles(file))
-                        command.postValue(DownloadCommand.ShowDownloadFinishedNotification(file, mimeType))
-                    }
-
-                    override fun downloadFailed(
-                        message: String,
-                        downloadFailReason: DownloadFailReason
-                    ) {
-                        // TODO [Improve downloads] This used only when DownloadManager is not involved.
-                        Timber.w("Failed to download file [$message]")
-                        pixel.fire(AppPixelName.DOWNLOAD_REQUEST_FAILED)
-                        command.postValue(DownloadCommand.ShowDownloadFailedNotification(message, downloadFailReason))
-                    }
-
-                    override fun downloadCancelled() {
-                        Timber.i("Download cancelled")
-                        closeAndReturnToSourceIfBlankTab()
-                    }
-
-                    override fun downloadOpened() {
-                        closeAndReturnToSourceIfBlankTab()
-                    }
-                }
-            )
+            fileDownloader.download(pendingFileDownload, downloadCallback)
         }
     }
 
@@ -2629,7 +2568,8 @@ class BrowserTabViewModelFactory @Inject constructor(
     private val appLinksHandler: Provider<DuckDuckGoAppLinksHandler>,
     private val variantManager: Provider<VariantManager>,
     private val ampLinks: Provider<AmpLinks>,
-    private val trackingParameters: Provider<TrackingParameters>
+    private val trackingParameters: Provider<TrackingParameters>,
+    private val downloadCallback: Provider<DownloadCallback>,
 ) : ViewModelFactoryPlugin {
     override fun <T : ViewModel?> create(modelClass: Class<T>): T? {
         with(modelClass) {
@@ -2671,7 +2611,8 @@ class BrowserTabViewModelFactory @Inject constructor(
                     appLinksHandler.get(),
                     variantManager.get(),
                     ampLinks.get(),
-                    trackingParameters.get()
+                    trackingParameters.get(),
+                    downloadCallback.get()
                 ) as T
                 else -> null
             }
