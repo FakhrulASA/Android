@@ -778,5 +778,4 @@
         <item name="android:textColor">@color/cornflowerDark</item>
         <item name="android:background">@drawable/button_secondary_bg</item>
     </style>
-
 </resources>
