@@ -173,6 +173,8 @@ import com.duckduckgo.app.statistics.isFireproofExperimentEnabled
 import com.duckduckgo.app.utils.ConflatedJob
 import com.duckduckgo.app.widget.AddWidgetLauncher
 import com.duckduckgo.appbuildconfig.api.AppBuildConfig
+import com.duckduckgo.downloads.api.DOWNLOAD_SNACKBAR_DELAY
+import com.duckduckgo.downloads.api.DOWNLOAD_SNACKBAR_LENGTH
 import com.duckduckgo.remote.messaging.api.RemoteMessage
 import com.duckduckgo.downloads.api.DownloadCommand
 import com.duckduckgo.downloads.api.DownloadFailReason
@@ -610,6 +612,7 @@ class BrowserTabFragment :
         }
     }
 
+    @SuppressLint("WrongConstant")
     private fun downloadStarted(command: DownloadCommand.ShowDownloadStartedMessage) {
         if (command.showNotification) {
             fileDownloadNotificationManager.showDownloadInProgressNotification()
@@ -631,7 +634,7 @@ class BrowserTabFragment :
                     }
             else -> view?.makeSnackbarWithNoBottomInset(getString(command.messageId), Snackbar.LENGTH_LONG)
         }
-        view?.postDelayed({ downloadFailedSnackbar ?.show() }, 1500L)
+        view?.postDelayed({ downloadFailedSnackbar ?.show() }, DOWNLOAD_SNACKBAR_DELAY)
     }
 
     private fun downloadSucceeded(command: DownloadCommand.ShowDownloadSuccessMessage) {
@@ -647,7 +650,7 @@ class BrowserTabFragment :
                     }
                 }
             }
-        view?.postDelayed({ downloadSucceededSnackbar?.show() }, 1500L)
+        view?.postDelayed({ downloadSucceededSnackbar?.show() }, DOWNLOAD_SNACKBAR_DELAY)
     }
 
     private fun addTabsObserver() {
