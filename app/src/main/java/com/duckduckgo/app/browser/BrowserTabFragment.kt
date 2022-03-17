@@ -617,7 +617,7 @@ class BrowserTabFragment :
         if (command.showNotification) {
             fileDownloadNotificationManager.showDownloadInProgressNotification()
         }
-        view?.makeSnackbarWithNoBottomInset(getString(command.messageId, command.fileName), 750)?.show()
+        view?.makeSnackbarWithNoBottomInset(getString(command.messageId, command.fileName), DOWNLOAD_SNACKBAR_LENGTH)?.show()
     }
 
     private fun downloadFailed(command: DownloadCommand.ShowDownloadFailedMessage) {

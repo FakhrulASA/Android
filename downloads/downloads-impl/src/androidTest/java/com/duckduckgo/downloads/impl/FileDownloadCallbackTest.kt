@@ -139,7 +139,7 @@ class FileDownloadCallbackTest {
 
         callback.onCancel(downloadId = downloadId)
 
-        verify(mockPixel).fire(AppPixelName.DOWNLOAD_REQUEST_SUCCEEDED)
+        verify(mockPixel).fire(DownloadsPixelName.DOWNLOAD_REQUEST_SUCCEEDED)
         verify(mockDownloadsRepository).delete(
             downloadIdList = listOf(downloadId)
         )

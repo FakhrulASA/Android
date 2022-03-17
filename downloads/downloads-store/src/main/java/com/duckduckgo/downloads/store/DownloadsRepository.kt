@@ -57,7 +57,7 @@ class DefaultDownloadsRepository(private val downloadsDatabase: DownloadsDatabas
     }
 
     override suspend fun delete(downloadIdList: List<Long>) {
-        downloadsDao.delete(downloadIdList)
+        downloadsDatabase.downloadsDao().delete(downloadIdList)
     }
 
     override suspend fun deleteAll() {

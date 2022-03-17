@@ -33,15 +33,6 @@ import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 
-interface DownloadCallback {
-    suspend fun onStart(downloadItem: DownloadItem)
-    suspend fun onSuccess(downloadId: Long, contentLength: Long)
-    suspend fun onSuccess(file: File, mimeType: String?)
-    suspend fun onCancel(downloadId: Long)
-    suspend fun onFailure(downloadId: Long? = null, url: String? = null, reason: DownloadFailReason)
-    fun commands(): Flow<FileDownloadCallback.DownloadCommand>
-}
-
 class FileDownloadCallback @Inject constructor(
     private val downloadsRepository: DownloadsRepository,
     private val pixel: Pixel
