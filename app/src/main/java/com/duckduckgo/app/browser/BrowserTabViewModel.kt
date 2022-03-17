@@ -113,6 +113,8 @@ import com.duckduckgo.app.tabs.model.TabEntity
 import com.duckduckgo.app.tabs.model.TabRepository
 import com.duckduckgo.app.trackerdetection.model.TrackingEvent
 import com.duckduckgo.app.usage.search.SearchCountDao
+import com.duckduckgo.app.voice.VoiceSearchAvailability
+import com.duckduckgo.app.voice.VoiceSearchAvailabilityPixelLogger
 import com.duckduckgo.di.scopes.AppScope
 import com.duckduckgo.privacy.config.api.ContentBlocking
 import com.duckduckgo.privacy.config.api.Gpc
@@ -171,7 +173,9 @@ class BrowserTabViewModel(
     private val appLinksHandler: AppLinksHandler,
     private val variantManager: VariantManager,
     private val ampLinks: AmpLinks,
-    private val trackingParameters: TrackingParameters
+    private val trackingParameters: TrackingParameters,
+    private val voiceSearchAvailability: VoiceSearchAvailability,
+    private val voiceSearchPixelLogger: VoiceSearchAvailabilityPixelLogger
 ) : WebViewClientListener, EditSavedSiteListener, HttpAuthenticationListener, SiteLocationPermissionDialog.SiteLocationPermissionDialogListener,
     SystemLocationPermissionDialog.SystemLocationPermissionDialogListener, UrlExtractionListener, ViewModel() {
 
@@ -249,7 +253,8 @@ class BrowserTabViewModel(
     data class OmnibarViewState(
         val omnibarText: String = "",
         val isEditing: Boolean = false,
-        val shouldMoveCaretToEnd: Boolean = false
+        val shouldMoveCaretToEnd: Boolean = false,
+        val showVoiceSearch: Boolean = false
     )
 
     data class LoadingViewState(
@@ -553,6 +558,8 @@ class BrowserTabViewModel(
     init {
         initializeViewStates()
         configureAutoComplete()
+        configureVoiceSearch()
+
         fireproofWebsiteState.observeForever(fireproofWebsitesObserver)
         fireproofDialogsEventHandler.event.observeForever(fireproofDialogEventObserver)
         navigationAwareLoginDetector.loginEventLiveData.observeForever(loginDetectionObserver)
@@ -671,6 +678,10 @@ class BrowserTabViewModel(
                 }
             }
         }
+    }
+
+    private fun configureVoiceSearch() {
+        if (voiceSearchAvailability.isVoiceSearchSupported) voiceSearchPixelLogger.log()
     }
 
     @SuppressLint("CheckResult")
@@ -821,7 +832,11 @@ class BrowserTabViewModel(
 
         globalLayoutState.value = Browser(isNewTabState = false)
         findInPageViewState.value = FindInPageViewState(visible = false, canFindInPage = true)
-        omnibarViewState.value = currentOmnibarViewState().copy(omnibarText = trimmedInput, shouldMoveCaretToEnd = false)
+        omnibarViewState.value = currentOmnibarViewState().copy(
+            omnibarText = trimmedInput,
+            shouldMoveCaretToEnd = false,
+            showVoiceSearch = voiceSearchAvailability.shouldShowVoiceSearch(urlLoaded = urlToNavigate)
+        )
         browserViewState.value = currentBrowserViewState().copy(browserShowing = true, showClearButton = false)
         autoCompleteViewState.value =
             currentAutoCompleteViewState().copy(showSuggestions = false, showFavorites = false, searchResults = AutoCompleteResult("", emptyList()))
@@ -1017,7 +1032,11 @@ class BrowserTabViewModel(
         browserViewState.value = browserState
 
         findInPageViewState.value = FindInPageViewState()
-        omnibarViewState.value = currentOmnibarViewState().copy(omnibarText = "", shouldMoveCaretToEnd = false)
+        omnibarViewState.value = currentOmnibarViewState().copy(
+            omnibarText = "",
+            shouldMoveCaretToEnd = false,
+            showVoiceSearch = voiceSearchAvailability.shouldShowVoiceSearch()
+        )
         loadingViewState.value = currentLoadingViewState().copy(isLoading = false)
 
         deleteTabPreview(tabId)
@@ -1086,7 +1105,12 @@ class BrowserTabViewModel(
         buildSiteFactory(url, title)
 
         val currentOmnibarViewState = currentOmnibarViewState()
-        omnibarViewState.value = currentOmnibarViewState.copy(omnibarText = omnibarTextForUrl(url), shouldMoveCaretToEnd = false)
+        val omnibarText = omnibarTextForUrl(url)
+        omnibarViewState.value = currentOmnibarViewState.copy(
+            omnibarText = omnibarText,
+            shouldMoveCaretToEnd = false,
+            showVoiceSearch = voiceSearchAvailability.shouldShowVoiceSearch(urlLoaded = url)
+        )
         val currentBrowserViewState = currentBrowserViewState()
         val domain = site?.domain
         val canWhitelist = domain != null
@@ -1250,7 +1274,14 @@ class BrowserTabViewModel(
         site?.url = url
         onSiteChanged()
         val currentOmnibarViewState = currentOmnibarViewState()
-        omnibarViewState.postValue(currentOmnibarViewState.copy(omnibarText = omnibarTextForUrl(url), shouldMoveCaretToEnd = false))
+        val omnibarText = omnibarTextForUrl(url)
+        omnibarViewState.postValue(
+            currentOmnibarViewState.copy(
+                omnibarText = omnibarText,
+                shouldMoveCaretToEnd = false,
+                showVoiceSearch = voiceSearchAvailability.shouldShowVoiceSearch(urlLoaded = url)
+            )
+        )
         browserViewState.postValue(currentBrowserViewState().copy(isFireproofWebsite = isFireproofWebsite()))
         viewModelScope.launch { updateBookmarkAndFavoriteState(url) }
     }
@@ -1635,7 +1666,13 @@ class BrowserTabViewModel(
             privacyGradeViewState.value = currentPrivacyGradeState().copy(showEmptyGrade = false)
         }
 
-        omnibarViewState.value = currentOmnibarViewState().copy(isEditing = hasFocus)
+        omnibarViewState.value = currentOmnibarViewState().copy(
+            isEditing = hasFocus,
+            showVoiceSearch = voiceSearchAvailability.shouldShowVoiceSearch(
+                isEditing = hasFocus,
+                urlLoaded = url ?: ""
+            )
+        )
 
         val currentBrowserViewState = currentBrowserViewState()
         browserViewState.value = currentBrowserViewState.copy(
@@ -2002,10 +2039,14 @@ class BrowserTabViewModel(
 
     private fun initializeViewStates() {
         globalLayoutState.value = Browser()
-        browserViewState.value = BrowserViewState().copy(addToHomeVisible = addToHomeCapabilityDetector.isAddToHomeSupported())
+        browserViewState.value = BrowserViewState().copy(
+            addToHomeVisible = addToHomeCapabilityDetector.isAddToHomeSupported()
+        )
         loadingViewState.value = LoadingViewState()
         autoCompleteViewState.value = AutoCompleteViewState()
-        omnibarViewState.value = OmnibarViewState()
+        omnibarViewState.value = OmnibarViewState(
+            showVoiceSearch = voiceSearchAvailability.shouldShowVoiceSearch()
+        )
         findInPageViewState.value = FindInPageViewState()
         ctaViewState.value = CtaViewState()
         privacyGradeViewState.value = PrivacyGradeViewState()
@@ -2330,7 +2371,10 @@ class BrowserTabViewModel(
 
     override fun requiresAuthentication(request: BasicAuthenticationRequest) {
         if (request.host != site?.uri?.host) {
-            omnibarViewState.value = currentOmnibarViewState().copy(omnibarText = request.site)
+            omnibarViewState.value = currentOmnibarViewState().copy(
+                omnibarText = request.site,
+                showVoiceSearch = false
+            )
             command.value = HideWebContent
         }
         command.value = RequiresAuthentication(request)
@@ -2568,7 +2612,10 @@ class BrowserTabViewModel(
         command.postValue(LoadExtractedUrl(extractedUrl = initialUrl))
     }
 
-    override fun onUrlExtracted(initialUrl: String, extractedUrl: String?) {
+    override fun onUrlExtracted(
+        initialUrl: String,
+        extractedUrl: String?
+    ) {
         val destinationUrl: String = if (extractedUrl != null) {
             ampLinks.lastAmpLinkInfo = AmpLinkInfo(ampLink = initialUrl)
             Timber.d("AMP link detection: Success! Loading extracted URL: $extractedUrl")
@@ -2629,7 +2676,9 @@ class BrowserTabViewModelFactory @Inject constructor(
     private val appLinksHandler: Provider<DuckDuckGoAppLinksHandler>,
     private val variantManager: Provider<VariantManager>,
     private val ampLinks: Provider<AmpLinks>,
-    private val trackingParameters: Provider<TrackingParameters>
+    private val trackingParameters: Provider<TrackingParameters>,
+    private val voiceSearchAvailability: Provider<VoiceSearchAvailability>,
+    private val voiceSearchPixelLogger: Provider<VoiceSearchAvailabilityPixelLogger>
 ) : ViewModelFactoryPlugin {
     override fun <T : ViewModel?> create(modelClass: Class<T>): T? {
         with(modelClass) {
@@ -2671,7 +2720,9 @@ class BrowserTabViewModelFactory @Inject constructor(
                     appLinksHandler.get(),
                     variantManager.get(),
                     ampLinks.get(),
-                    trackingParameters.get()
+                    trackingParameters.get(),
+                    voiceSearchAvailability.get(),
+                    voiceSearchPixelLogger.get()
                 ) as T
                 else -> null
             }
