@@ -54,6 +54,7 @@ import com.duckduckgo.app.systemsearch.SystemSearchViewModel.Command.*
 import com.duckduckgo.app.tabs.ui.GridViewColumnCalculator
 import com.duckduckgo.app.voice.VoiceSearchAvailability
 import com.duckduckgo.app.voice.VoiceSearchLauncher
+import com.duckduckgo.app.voice.VoiceSearchLauncher.Source.WIDGET
 import com.duckduckgo.mobile.android.ui.viewbinding.viewBinding
 import com.google.android.material.snackbar.Snackbar
 import javax.inject.Inject
@@ -254,7 +255,7 @@ class SystemSearchActivity : DuckDuckGoActivity() {
     private fun configureVoiceSearch() {
         if (voiceSearchAvailability.isVoiceSearchSupported) {
             voiceSearch.visibility = View.VISIBLE
-            voiceSearchLauncher.registerResultsCallback(this, this) {
+            voiceSearchLauncher.registerResultsCallback(this, this, WIDGET) {
                 if (it is VoiceSearchLauncher.Event.VoiceRecognitionSuccess) {
                     viewModel.onUserSelectedToEditQuery(it.result)
                 }
